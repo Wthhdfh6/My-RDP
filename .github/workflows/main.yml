@@ -1,0 +1,24 @@
+name: Tailscale Direct Windows RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-rdp:
+    runs-on: windows-latest
+    steps:
+      - name: Enable Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Set RDP Password
+        run: |
+          net user runneradmin "RdpPassword123!"
+          net localgroup administrators runneradmin /add
+
+      - name: Keep Alive Session
+        run: |
+          Write-Output "RDP is ready and running..."
+          Start-Sleep -Seconds 21600
+          
