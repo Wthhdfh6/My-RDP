@@ -1,61 +1,35 @@
-name: Ngrok Windows RDP
+name: Tailscale Direct Windows RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      ngrok_authtoken:
-        description: 'Ngrok Authtoken (Optional if saved as secret)'
-        required: false
-        default: ''
 
 jobs:
-  build:
+  build-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360
     steps:
-      - name: Download & Extract Ngrok
-        run: |
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive -Path "ngrok.zip" -DestinationPath "."
-
-      - name: Authenticate Ngrok
-        run: |
-          $token = "${{ github.event.inputs.ngrok_authtoken }}"
-          if (-not $token) { $token = "${{ secrets.NGROK_AUTHTOKEN }}" }
-          if ($token) { .\ngrok.exe config add-authtoken $token }
-
       - name: Enable Remote Desktop
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
       - name: Set RDP Password
         run: |
           net user runneradmin "RdpPassword123!"
 
-      - name: Start Ngrok TCP Tunnel (Port 3389)
+      - name: Install Tailscale
         run: |
-          Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 5
+          winget install Tailscale.Tailscale
 
-      - name: Display Connection Details
+      - name: Connect Tailscale (Manual Login or Auth Key)
         run: |
-          Write-Host "=========================================="
-          Write-Host " RDP is Ready! Use the address below:"
-          Write-Host "=========================================="
-          try {
-              $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-              $tcpUrl = ($response.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
-              Write-Host " Address (Host:Port): $tcpUrl" -ForegroundColor Green
-          } catch {
-              Write-Host " Could not fetch ngrok URL automatically. Check ngrok tab or use authtoken." -ForegroundColor Yellow
-          }
-          Write-Host " Username: runneradmin"
-          Write-Host " Password: RdpPassword123!"
-          Write-Host "=========================================="
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+
+      - name: Show Tailscale IP
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
       - name: Keep Alive Session
         run: |
+          Write-Output "RDP is ready and running..."
           Start-Sleep -Seconds 21600
           
